@@ -109,7 +109,7 @@ Throughout GSoC, I wrote a number of unit tests to ensure stability, increase co
 <td><font color ='green'>+307 <font color ='red'>-111</td>
 </tr>
 <tr>
-<td>🚧</td>
+<td>✅</td>
 <td><a href = "https://github.com/alexisthedev/hephaestus/pull/14">Union Types</a></td>
 <td><font color ='green'>+471 <font color ='red'>−77</td>
 </tr>
