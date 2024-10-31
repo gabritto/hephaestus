@@ -9,14 +9,13 @@ class TypeAliasDeclaration(ast.Declaration):
         self.alias = alias
 
     def children(self):
-        return [self.alias]
+        return []
 
     def get_type(self):
         return tst.AliasType(self.alias, self.name)
 
     def update_children(self, children):
-        super().update_children(children)
-        self.alias = children[0]
+        pass
 
     def is_equal(self, other):
         if isinstance(other, TypeAliasDeclaration):

@@ -98,7 +98,8 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
         return types
 
     def get_decl_candidates(self):
-        return [gen_type_alias_decl, ]
+        return []
+        # return [gen_type_alias_decl, ]
 
     def update_add_node_to_parent(self):
         return {
@@ -131,7 +132,7 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
         """
         return {
             "NumberLiteralType": lambda etype: ast.IntegerConstant(
-                etype.literal, NumberLiteralType),
+                etype.literal, NumberLiteralType(etype.literal)),
             "StringLiteralType": lambda etype: ast.StringConstant(
                 etype.literal),
             "UnionType": lambda etype: self._union_type_factory.get_union_constant(
@@ -836,29 +837,29 @@ features of typescript.
 """
 
 
-def gen_type_alias_decl(gen,
-                        etype=None) -> ts_ast.TypeAliasDeclaration:
-    """ Generate a Type Declaration (Type Alias)
+# def gen_type_alias_decl(gen,
+#                         etype=None) -> ts_ast.TypeAliasDeclaration:
+#     """ Generate a Type Declaration (Type Alias)
 
-    Args:
-       etype: the type(s) that the type alias describes
+#     Args:
+#        etype: the type(s) that the type alias describes
 
-    Returns:
-        An AST node that describes a type alias declaration
-        as defined in src.ir.typescript_ast.py
+#     Returns:
+#         An AST node that describes a type alias declaration
+#         as defined in src.ir.typescript_ast.py
 
-    """
-    alias_type = (etype if etype else
-                  gen.select_type())
-    initial_depth = gen.depth
-    gen.depth += 1
-    gen.depth = initial_depth
-    type_alias_decl = ts_ast.TypeAliasDeclaration(
-        name=ut.random.identifier('lower'),
-        alias=alias_type
-    )
-    gen._add_node_to_parent(gen.namespace, type_alias_decl)
-    return type_alias_decl
+#     """
+#     alias_type = (etype if etype else
+#                   gen.select_type())
+#     initial_depth = gen.depth
+#     gen.depth += 1
+#     gen.depth = initial_depth
+#     type_alias_decl = ts_ast.TypeAliasDeclaration(
+#         name=ut.random.identifier('lower'),
+#         alias=alias_type
+#     )
+#     gen._add_node_to_parent(gen.namespace, type_alias_decl)
+#     return type_alias_decl
 
 
 def add_type_alias(gen, namespace, type_name, ta_decl):

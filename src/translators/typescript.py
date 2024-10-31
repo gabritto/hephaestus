@@ -36,14 +36,14 @@ class TypeScriptTranslator(BaseTranslator):
         self._namespace = ast.GLOBAL_NAMESPACE
         self._nodes_stack = [None]
 
-    def get_visitors(self):
-        # Overwriting method of ASTVisitor class
-        # to add typescript-specific visitors
-        visitors = super().get_visitors()
-        visitors.update({
-            ts_ast.TypeAliasDeclaration: self.visit_type_alias_decl,
-        })
-        return visitors
+    # def get_visitors(self):
+    #     # Overwriting method of ASTVisitor class
+    #     # to add typescript-specific visitors
+    #     visitors = super().get_visitors()
+    #     visitors.update({
+    #         ts_ast.TypeAliasDeclaration: self.visit_type_alias_decl,
+    #     })
+    #     return visitors
 
     def needs_this_prefix(self, node, decl):
         func_name = tst.TypeScriptBuiltinFactory().get_function_type().name[:-1]
@@ -746,12 +746,12 @@ class TypeScriptTranslator(BaseTranslator):
         self.ident = old_ident
         self._children_res.append(res)
 
-    @append_to
-    def visit_type_alias_decl(self, node):
-        old_ident = self.ident
-        prefix = " " * self.ident
-        self.ident = 0
-        res = prefix + "type " + node.name
-        res += " = " + self.get_type_name(node.alias)
-        self.ident = old_ident
-        self._children_res.append(res)
+    # @append_to
+    # def visit_type_alias_decl(self, node):
+    #     old_ident = self.ident
+    #     prefix = " " * self.ident
+    #     self.ident = 0
+    #     res = prefix + "type " + node.name
+    #     res += " = " + self.get_type_name(node.alias)
+    #     self.ident = old_ident
+    #     self._children_res.append(res)

@@ -1,6 +1,6 @@
 from src.ir import ast
 from src.ir import types
-
+# from src.ir import typescript_ast as tast
 
 class ASTVisitor():
 
@@ -48,6 +48,7 @@ class ASTVisitor():
             ast.Assignment: self.visit_assign,
             ast.Program: self.visit_program,
             ast.Block: self.visit_block,
+            # tast.TypeAliasDeclaration: self.visit_type_alias_decl
         }
 
     def visit_program(self, node):
@@ -149,6 +150,8 @@ class ASTVisitor():
     def visit_assign(self, node):
         raise NotImplementedError('visit_assign() must be implemented')
 
+    # def visit_type_alias_decl(self, node):
+    #     raise NotImplementedError('visit_type_alias_decl() must be implemented')
 
 class DefaultVisitor(ASTVisitor):
 
@@ -253,6 +256,8 @@ class DefaultVisitor(ASTVisitor):
     def visit_assign(self, node):
         return self._visit_node(node)
 
+    # def visit_type_alias_decl(self, node):
+    #     return self._visit_node(node)
 
 class DefaultVisitorUpdate(DefaultVisitor):
 
