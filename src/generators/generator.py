@@ -838,7 +838,8 @@ class Generator():
                       subtype=True,
                       exclude_var=False,
                       gen_bottom=False,
-                      sam_coercion=False) -> ast.Expr:
+                      sam_coercion=False,
+                      no_constant=False) -> ast.Expr:
         """Generate an expression.
 
         This function could produce new nodes external to the generated
@@ -875,7 +876,7 @@ class Generator():
             msg = "Found subtype of {}: {}".format(old_type, expr_type)
             log(self.logger, msg)
         generators = self.get_generators(expr_type, only_leaves, subtype,
-                                         exclude_var, sam_coercion=sam_coercion)
+                                         exclude_var, sam_coercion=sam_coercion, no_constant=no_constant)
         expr = ut.random.choice(generators)(expr_type)
         # Make a probablistic choice, and assign the generated expr
         # into a variable, and return that variable reference.
@@ -1212,7 +1213,8 @@ class Generator():
         e1_type = ut.random.choice(valid_types)
         e2_type = ut.random.choice(e2_types[e1_type])
         e1 = self.generate_expr(e1_type, only_leaves)
-        e2 = self.generate_expr(e2_type, only_leaves)
+        no_constant = isinstance(e1, ast.Constant)
+        e2 = self.generate_expr(e2_type, only_leaves, no_constant=no_constant) # TODO: can this fail when `no_constant` is true? if yes, we should use `e1` as a fallback
         self.depth = initial_depth
         if self.language == 'java' and e1_type.name in ('Boolean', 'String'):
             op = ut.random.choice(
@@ -1849,7 +1851,8 @@ class Generator():
                        only_leaves: bool,
                        subtype: bool,
                        exclude_var: bool,
-                       sam_coercion=False) -> List[Callable]:
+                       sam_coercion=False,
+                       no_constant=False) -> List[Callable]:
         """Get candidate generators for the given type.
 
         Args:
@@ -1877,25 +1880,28 @@ class Generator():
             lambda x: self.gen_new(x, only_leaves, subtype,
                                    sam_coercion=sam_coercion),
         ]
-        constant_candidates = {
-            self.bt_factory.get_number_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_integer_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_big_integer_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_byte_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_short_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_long_type().name: gens.gen_integer_constant,
-            self.bt_factory.get_float_type().name: gens.gen_real_constant,
-            self.bt_factory.get_double_type().name: gens.gen_real_constant,
-            self.bt_factory.get_big_decimal_type().name: gens.gen_real_constant,
-            self.bt_factory.get_char_type().name: gens.gen_char_constant,
-            self.bt_factory.get_string_type().name: gens.gen_string_constant,
-            self.bt_factory.get_boolean_type().name: gens.gen_bool_constant,
-            self.bt_factory.get_array_type().name: (
-                lambda x: self.gen_array_expr(x, only_leaves, subtype=subtype)
-            ),
-            self.bt_factory.get_null_type().name: lambda x: ast.Null
-        }
-        constant_candidates.update(self.bt_factory.get_constant_candidates(constant_candidates))
+        if not no_constant:
+            constant_candidates = {
+                self.bt_factory.get_number_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_integer_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_big_integer_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_byte_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_short_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_long_type().name: gens.gen_integer_constant,
+                self.bt_factory.get_float_type().name: gens.gen_real_constant,
+                self.bt_factory.get_double_type().name: gens.gen_real_constant,
+                self.bt_factory.get_big_decimal_type().name: gens.gen_real_constant,
+                self.bt_factory.get_char_type().name: gens.gen_char_constant,
+                self.bt_factory.get_string_type().name: gens.gen_string_constant,
+                self.bt_factory.get_boolean_type().name: gens.gen_bool_constant,
+                self.bt_factory.get_array_type().name: (
+                    lambda x: self.gen_array_expr(x, only_leaves, subtype=subtype)
+                ),
+                self.bt_factory.get_null_type().name: lambda x: ast.Null
+            }
+            constant_candidates.update(self.bt_factory.get_constant_candidates(constant_candidates))
+        else:
+            constant_candidates = {}
         binary_ops = {
             self.bt_factory.get_boolean_type(): [
                 lambda x: self.gen_logical_expr(x, only_leaves),
