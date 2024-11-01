@@ -471,8 +471,10 @@ class TypeDependencyAnalysis(DefaultVisitor):
 
         # If the receiver type is a type variable, compute its bound.
         if receiver_t.is_type_var():
-            receiver_t = receiver_t.get_bound_rec(self._bt_factory)
-            return receiver_t, {}
+            # FIXME this is here to prevent a weird exception that occurs
+            # when we return None here - should revisit this to see if theres
+            # a better fix
+            return (receiver_t.get_bound_rec(self._bt_factory) or receiver_t), {}
 
         if receiver_t.is_wildcard():
             return self._get_receiver_type(receiver_t.get_bound_rec())
@@ -797,6 +799,10 @@ class TypeDependencyAnalysis(DefaultVisitor):
                 return
 
             receiver_t, _ = self._get_receiver_type(receiver_t)
+            # if receiver_t is None:
+            #     print(node)
+            #     print(before)
+            #     print("oh no")
             fun_decl = tu.get_decl_from_inheritance(receiver_t,
                                                     node.func, self._context)
             if fun_decl is None:
