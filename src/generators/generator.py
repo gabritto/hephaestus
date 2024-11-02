@@ -1899,7 +1899,7 @@ class Generator():
         binary_ops = {
             self.bt_factory.get_boolean_type(): [
                 lambda x: self.gen_logical_expr(x, only_leaves),
-                lambda x: self.gen_equality_expr(only_leaves),
+                # lambda x: self.gen_equality_expr(only_leaves), # This generates TypeScript errors
                 lambda x: self.gen_comparison_expr(only_leaves)
             ],
         }
