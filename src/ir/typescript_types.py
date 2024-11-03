@@ -450,12 +450,15 @@ class UnionType(TypeScriptBuiltin):
 
     @two_way_subtyping
     def is_subtype(self, other):
-        if isinstance(other, UnionType):
-            for t in self.types:
+        for t in self.types:
+            if isinstance(other, UnionType):
                 if not any(t.is_subtype(other_t) for other_t in other.types):
                     return False
-            return True
-        return other.name == 'Object'
+            else:
+                if not t.is_subtype(other):
+                    return False
+        return True
+            
 
     def two_way_subtyping(self, other):
         return other in set(self.types)

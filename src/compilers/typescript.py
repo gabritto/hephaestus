@@ -18,7 +18,7 @@ class TypeScriptCompiler(BaseCompiler):
         return ['tsc', '-v']
 
     def get_compiler_cmd(self):
-        return ['tsc --target es2020 --pretty false', os.path.join(
+        return ['tsc --target es2020 --pretty false --strict true', os.path.join(
             self.input_name, '**', '*.ts')]
 
     def get_filename(self, match):
