@@ -680,12 +680,16 @@ class Generator():
                 if k.name not in type_param_names
             }
             old = p.get_type()
-            p.param_type = tp.substitute_type(p.get_type(), sub_type_map)
+            if p.default is not None and self.language == "typescript":
+                param_type = tst.UnionType([p.get_type(), tst.UndefinedType()])
+            else:
+                param_type = p.get_type()
+            p.param_type = tp.substitute_type(param_type, sub_type_map)
             sub = old != p.get_type()
             if not sub:
                 p.param_type = tp.substitute_type(p.get_type(),
                                                   substituted_type_params)
-            p.default = None
+            p.default = None # Alternative: Use the same default as the super method.
         sub = False
         sub_type_map = {
             k: v for k, v in type_var_map.items()
