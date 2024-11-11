@@ -246,6 +246,8 @@ class Generator():
         # Also note that at this point, we do not allow a conflict between
         # type variable names of class and type variable names of functions.
         # TODO consider being less conservative.
+        can_narrow = (not nested_function) and (type_params is None) and (not is_interface) and (params is None)
+        gen_narrowing = ut.random.bool(prob=0.1) if can_narrow else False
         if not nested_function:
             if type_params is not None:
                 for t_p in type_params:
@@ -279,6 +281,9 @@ class Generator():
                 )
                 else self._gen_func_params_with_default()
             )
+            if gen_narrowing:
+                # TODO: gen param for narrowing
+                pass
         ret_type = self._get_func_ret_type(params, etype, not_void=not_void)
         if is_interface or (abstract and ut.random.bool()):
             body, inferred_type = None, None
@@ -301,7 +306,7 @@ class Generator():
             self.context.add_var(self.namespace, p.name, p)
 
         if func.body is not None:
-            body = self._gen_func_body(ret_type)
+            body = self._gen_func_body(ret_type) # TODO: add narrowing statements, or have special narrowing body func
         func.body = body
 
         self._inside_java_lambda = prev_inside_java_lamdba

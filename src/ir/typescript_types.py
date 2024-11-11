@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from src.generators.generator import Generator
 import src.ir.ast as ast
 import src.ir.typescript_ast as ts_ast
 import src.ir.builtins as bt
@@ -51,7 +52,7 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
         return FunctionType(nr_parameters)
 
     def get_object_type(self):
-        return ObjectLowercaseType()
+        return ObjectLowercaseType() # TODO: this should probably be type `{}`; type `object` just means non-null and non-undefined
 
     def get_primitive_types(self):
         return [
@@ -730,6 +731,7 @@ class UnionType(TypeScriptBuiltin):
     def __hash__(self):
         return hash(str(self.name) + str(self.types))
 
+TYPE_KINDS = ["object", "function", "undefined", "boolean", "string", "number", "bigint"]
 
 class UnionTypeFactory(object):
     def __init__(self, max_ut, max_in_union):
@@ -737,7 +739,7 @@ class UnionTypeFactory(object):
         self.unions = []
         self.max_in_union = max_in_union
 
-    def get_number_of_types(self):
+    def get_number_of_types(self) -> int:
         return ut.random.integer(2, self.max_in_union)
 
     def get_types_for_union(self, gen):
@@ -806,6 +808,44 @@ class UnionTypeFactory(object):
             return ast.BottomConstant(utype.types[0])
         t = ut.random.choice(type_candidates)
         return constants[t.name](t)
+    
+    def gen_narrowable_union_type(self, gen: Generator) -> UnionType:
+        max_num_of_types = self.get_number_of_types()
+        kinds = set(TYPE_KINDS)
+        types = set()
+        while len(types) < max_num_of_types: # TODO: filter out union types; can't filter all compound types because that includes some TS types I believe
+            all_types = [t for t in gen.get_types(exclude_type_vars=True) if get_type_kind(t) in kinds]
+            if len(all_types) == 0:
+                break
+            type = ut.random.choice(all_types)
+            types.add(type)
+            kind = get_type_kind(type)
+            kinds.remove(kind)
+        return UnionType(list(types))
+
+
+def get_type_kind(type: tp.Type) -> str:
+    name_to_kind = {
+        'StringLiteralType': 'string',
+        'string': 'string',
+        'numberLiteralType': 'number',
+        'number': 'number',
+        'BigInt': 'BigInt',
+        'boolean': 'Boolean',
+        'undefined': 'undefined',
+        'null': 'object',
+        'Array': 'object',
+        'UnionType': 'union'
+        }
+    type_name = type.get_name()
+    type_kind = name_to_kind[type_name]
+    if type_kind is not None:
+        return type_kind
+    if type_name.startswith('Function'):
+        return 'function'
+    return 'object'
+
+
 
 
 class ArrayType(tp.TypeConstructor, ObjectType):
