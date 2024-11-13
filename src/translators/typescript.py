@@ -746,6 +746,16 @@ class TypeScriptTranslator(BaseTranslator):
         self.ident = old_ident
         self._children_res.append(res)
 
+    @append_to
+    def visit_typeof_expr(self, node):
+        old_ident = self.ident
+        self.ident = 0
+        children = node.children()
+        for c in children:
+            c.accept(self)
+        children_res = self.pop_children_res(children)
+        res = ""
+
     # @append_to
     # def visit_type_alias_decl(self, node):
     #     old_ident = self.ident

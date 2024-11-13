@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import List
 
 from src.generators.generator import Generator
 import src.ir.ast as ast
@@ -140,6 +141,16 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
                 etype, constants),
         }
 
+    def gen_narrowable_union_type(self, gen: Generator):
+        return self._union_type_factory.gen_narrowable_union_type(gen)
+
+    # Narrowing body
+    def _gen_narrowing_body(self, gen: Generator, narrow_type: 'UnionType', param: ast.ParameterDeclaration, ret_type: tp.Type) -> ast.Block:
+        types = narrow_type.types
+        statements = []
+        for type in types:
+            condition = gen_narrowing_condition(gen, type, param)
+        return None # TODO
 
 class TypeScriptBuiltin(tp.Builtin):
     def __init__(self, name, primitive):
@@ -439,7 +450,7 @@ class LiteralTypeFactory:
 
 
 class UnionType(TypeScriptBuiltin):
-    def __init__(self, types, name="UnionType", primitive=False):
+    def __init__(self, types: List[tp.Type], name="UnionType", primitive=False):
         super().__init__(name, primitive)
         self.types = types
 
@@ -831,7 +842,7 @@ def get_type_kind(type: tp.Type) -> str:
         'numberLiteralType': 'number',
         'number': 'number',
         'BigInt': 'BigInt',
-        'boolean': 'Boolean',
+        'boolean': 'boolean',
         'undefined': 'undefined',
         'null': 'object',
         'Array': 'object',
@@ -845,7 +856,12 @@ def get_type_kind(type: tp.Type) -> str:
         return 'function'
     return 'object'
 
-
+def gen_narrowing_condition(gen: Generator, type: tp.Type, param: ast.ParameterDeclaration) -> ast.Expression:
+    kind = get_type_kind(type)
+    constant = ast.StringConstant(kind)
+    lexpr = ast.Typeof(ast.Variable(param.name))
+    # `typeof param === kind`
+    return ast.EqualityExpr(lexpr, constant, ast.Operator('==='))
 
 
 class ArrayType(tp.TypeConstructor, ObjectType):

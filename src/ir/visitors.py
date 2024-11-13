@@ -48,6 +48,7 @@ class ASTVisitor():
             ast.Assignment: self.visit_assign,
             ast.Program: self.visit_program,
             ast.Block: self.visit_block,
+            ast.Typeof: self.visit_typeof_expr
             # tast.TypeAliasDeclaration: self.visit_type_alias_decl
         }
 
@@ -149,6 +150,9 @@ class ASTVisitor():
 
     def visit_assign(self, node):
         raise NotImplementedError('visit_assign() must be implemented')
+
+    def visit_typeof_expr(self, node):
+        raise NotImplementedError('visit_typeof_expr() must be implemented')
 
     # def visit_type_alias_decl(self, node):
     #     raise NotImplementedError('visit_type_alias_decl() must be implemented')

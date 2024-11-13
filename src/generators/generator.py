@@ -242,12 +242,12 @@ class Generator():
 
         prev_inside_java_lamdba = self._inside_java_lambda
         self._inside_java_lambda = nested_function and self.language == "java"
+        can_narrow = self.language == "typescript" and (not nested_function) and (type_params is None) and (not is_interface) and (params is None)
+        gen_narrowing = ut.random.bool(prob=0.1) if can_narrow else False
         # Type parameters of functions cannot be variant.
         # Also note that at this point, we do not allow a conflict between
         # type variable names of class and type variable names of functions.
         # TODO consider being less conservative.
-        can_narrow = (not nested_function) and (type_params is None) and (not is_interface) and (params is None)
-        gen_narrowing = ut.random.bool(prob=0.1) if can_narrow else False
         if not nested_function:
             if type_params is not None:
                 for t_p in type_params:
@@ -282,7 +282,11 @@ class Generator():
                 else self._gen_func_params_with_default()
             )
             if gen_narrowing:
-                # TODO: gen param for narrowing
+                # gen param for narrowing
+                narrow_type = self.bt_factory.gen_narrowable_union_type(self)
+                narrow_param = self.gen_param_decl(etype=narrow_type)
+                params.append(narrow_param)
+                # TODO: maybe gen a type parameter as parameter type
                 pass
         ret_type = self._get_func_ret_type(params, etype, not_void=not_void)
         if is_interface or (abstract and ut.random.bool()):
@@ -2330,7 +2334,7 @@ class Generator():
         if inside_lambda:
             self._inside_java_lambda = prev_inside_java_lamdba
         ret_type = etype.type_args[-1]
-        return ret_type, params
+        return ret_type, params        
 
     # Matching functions
 

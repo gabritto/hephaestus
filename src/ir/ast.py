@@ -1390,3 +1390,7 @@ class Assignment(Expr):
                     self.expr.is_equal(other.expr) and
                     check_default_eq(self.receiver, other.receiver))
         return False
+
+class Typeof(Expr):
+    def __init__(self, expr: Expr):
+        self.expr = expr
