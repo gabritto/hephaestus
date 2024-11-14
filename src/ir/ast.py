@@ -1391,6 +1391,49 @@ class Assignment(Expr):
                     check_default_eq(self.receiver, other.receiver))
         return False
 
+# Added for TS narrowing
 class Typeof(Expr):
     def __init__(self, expr: Expr):
         self.expr = expr
+
+    def children(self):
+        return [self.expr]
+    
+    def update_children(self, children):
+        super().update_children(children)
+        self.expr = children[0]
+
+    def __str__(self):
+        return "typeof {}".format(str(self.expr))
+    
+    def is_equal(self, other):
+        if isinstance(other, Typeof):
+            return self.expr == other.expr
+        return False
+
+
+class Statement(Node):
+    pass
+
+class IfElse(Statement):
+    def __init__(self, cond: Expr, true_block: Block, false_block: Block):
+        self.cond = cond
+        self.true_block = true_block
+        self.false_block = false_block
+
+    def children(self):
+        return [self.cond, self.true_block, self.false_block]
+    
+    def update_children(self, children):
+        super().update_children(children)
+        self.cond = children[0]
+        self.true_block = children[1]
+        self.false_block = children[2]
+
+    def __str__(self):
+        return "if ({}) {{\n {} \n}} else {{\n {} \n}}".format(str(self.cond), "\n  ".join(map(str, self.true_block.body)), "\n  ".join(map(str, self.false_block.body)))
+
+    def is_equal(self, other):
+        if isinstance(other, IfElse):
+            return self.cond.is_equal(other.cond) and self.true_block.is_equal(other.true_block) and self.false_block.is_equal(other.false_block)
+        return False

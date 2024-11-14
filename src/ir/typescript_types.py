@@ -148,8 +148,16 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
     def _gen_narrowing_body(self, gen: Generator, narrow_type: 'UnionType', param: ast.ParameterDeclaration, ret_type: tp.Type) -> ast.Block:
         types = narrow_type.types
         statements = []
+        first = False
+        narrow_stmts = []
         for type in types:
+            # `typeof param === "kind"`
             condition = gen_narrowing_condition(gen, type, param)
+            param_var = ast.Variable(param.name)
+            # `let variable = param`
+            narrow_assert = gen.gen_variable_decl(etype=type, expr=param_var)
+            narrow_stmt = ast.Conditional
+            narrow_stmts.append()
         return None # TODO
 
 class TypeScriptBuiltin(tp.Builtin):
@@ -862,6 +870,8 @@ def gen_narrowing_condition(gen: Generator, type: tp.Type, param: ast.ParameterD
     lexpr = ast.Typeof(ast.Variable(param.name))
     # `typeof param === kind`
     return ast.EqualityExpr(lexpr, constant, ast.Operator('==='))
+
+
 
 
 class ArrayType(tp.TypeConstructor, ObjectType):

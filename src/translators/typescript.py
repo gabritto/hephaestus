@@ -754,7 +754,20 @@ class TypeScriptTranslator(BaseTranslator):
         for c in children:
             c.accept(self)
         children_res = self.pop_children_res(children)
-        res = ""
+        res = "{}(typeof ({}))".format(" "*old_ident, children_res[0])
+        self.ident = old_ident
+        self._children_res.append(res)
+
+    @append_to
+    def visit_if_else(self, node):
+        children = node.children()
+        for c in children:
+            c.accept(self)
+        children_res = self.pop_children_res(children)
+
+        # TODO: this is probably missing indentation
+        res = "if ({}) {} else {}".format(children_res[0], children_res[1], children_res[2])
+        self._children_res.append(res)
 
     # @append_to
     # def visit_type_alias_decl(self, node):
