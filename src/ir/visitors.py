@@ -263,6 +263,12 @@ class DefaultVisitor(ASTVisitor):
 
     def visit_assign(self, node):
         return self._visit_node(node)
+    
+    def visit_typeof_expr(self, node):
+        return self._visit_node(node)
+    
+    def visit_if_else(self, node):
+        return self.visit_node(node)
 
     # def visit_type_alias_decl(self, node):
     #     return self._visit_node(node)

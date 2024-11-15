@@ -168,7 +168,7 @@ def get_if_else(narrow_conds: List[Tuple[ast.Expr, ast.Node]]) -> ast.IfElse:
     if len(narrow_conds) == 2:
         else_block = ast.Block(body=[narrow_conds[1][1]], is_func_block=False)
     else:
-        else_block = [get_if_else(narrow_conds[1:])]
+        else_block = ast.Block([get_if_else(narrow_conds[1:])])
     return ast.IfElse(
         narrow_conds[0][0],
         ast.Block(body=[narrow_conds[0][1]], is_func_block=False),
@@ -847,10 +847,10 @@ class UnionTypeFactory(object):
         kinds = set(TYPE_KINDS)
         types = set()
         while len(types) < max_num_of_types: # TODO: filter out union types; can't filter all compound types because that includes some TS types I believe
-            all_types = [t for t in gen.get_types(exclude_type_vars=True) if get_type_kind(t) in kinds]
-            if len(all_types) == 0:
+            type = gen.select_type(exclude_native_compound_types=True,
+                                        filter_func=lambda t: get_type_kind(t) in kinds)
+            if type is None:
                 break
-            type = ut.random.choice(all_types)
             types.add(type)
             kind = get_type_kind(type)
             kinds.remove(kind)

@@ -1089,3 +1089,9 @@ class TypeDependencyAnalysis(DefaultVisitor):
                                                 parent_node_id)
             self._remove_declared_edge(parent_node_id)
             self._inferred_nodes[parent_node_id].append(target)
+    
+    def visit_typeof_expr(self, node):
+        return super().visit_typeof_expr(node) # TODO
+    
+    def visit_if_else(self, node):
+        return super().visit_if_else(node) # TODO

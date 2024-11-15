@@ -287,7 +287,6 @@ class Generator():
                 narrow_param = self.gen_param_decl(etype=narrow_type)
                 params.append(narrow_param)
                 # TODO: maybe gen a type parameter as parameter type
-                pass
         ret_type = self._get_func_ret_type(params, etype, not_void=not_void)
         if is_interface or (abstract and ut.random.bool()):
             body, inferred_type = None, None
@@ -2024,7 +2023,8 @@ class Generator():
                     exclude_covariants=False,
                     exclude_contravariants=False,
                     exclude_function_types=False,
-                    exclude_native_compound_types=False) -> tp.Type:
+                    exclude_native_compound_types=False,
+                    filter_func=None) -> tp.Type:
         """Select a type from the all available types.
 
         It will always instantiating type constructors to parameterized types.
@@ -2047,6 +2047,10 @@ class Generator():
                                exclude_contravariants=exclude_contravariants,
                                exclude_function_types=exclude_function_types,
                                exclude_native_compound_types=exclude_native_compound_types)
+        if filter_func is not None:
+            types = [t for t in types if filter_func(t)]
+            if len(types) == 0:
+                return None
         stype = ut.random.choice(types)
         if stype.is_type_constructor():
             exclude_type_vars = stype.name == self.bt_factory.get_array_type().name
@@ -2416,7 +2420,7 @@ class Generator():
             if not var_type:
                 continue
             if isinstance(getattr(var_type, 't_constructor', None),
-                          self.function_type):
+                          self.function_type) or isinstance(var_type, self.function_type):
                 continue
             cls, type_map_var = self._get_class(var_type)
             for attr in self._get_class_attributes(cls, attr_name):
