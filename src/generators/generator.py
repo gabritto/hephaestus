@@ -243,7 +243,7 @@ class Generator():
         prev_inside_java_lamdba = self._inside_java_lambda
         self._inside_java_lambda = nested_function and self.language == "java"
         can_narrow = self.language == "typescript" and (not nested_function) and (type_params is None) and (not is_interface) and (params is None)
-        gen_narrowing = ut.random.bool(prob=0.1) if can_narrow else False
+        gen_narrowing = ut.random.bool(prob=1) if can_narrow else False # TODO: have prob be 0.1 after testing
         # Type parameters of functions cannot be variant.
         # Also note that at this point, we do not allow a conflict between
         # type variable names of class and type variable names of functions.
@@ -310,7 +310,10 @@ class Generator():
             self.context.add_var(self.namespace, p.name, p)
 
         if func.body is not None:
-            body = self._gen_func_body(ret_type) # TODO: add narrowing statements, or have special narrowing body func
+            if gen_narrowing:
+                body = self.bt_factory.gen_narrowing_body(self, narrow_type, narrow_param, ret_type)
+            else:
+                body = self._gen_func_body(ret_type)
         func.body = body
 
         self._inside_java_lambda = prev_inside_java_lamdba
@@ -2298,6 +2301,35 @@ class Generator():
             exprs, decls = self._gen_side_effects()
             body = ast.Block(decls + exprs + [expr])
         return body
+
+    def _gen_func_body_stmts(self, ret_type: tp.Type) -> List[ast.Node]:
+        """Generate the statements for the body of a function or a lambda.
+
+        Args:
+            ret_type: Return type of the function
+            
+        """
+        expr_type = (
+            self.select_type(ret_types=False)
+            if ret_type == self.bt_factory.get_void_type()
+            else ret_type
+        )
+        expr = self.generate_expr(expr_type)
+        decls = list(self.context.get_declarations(
+            self.namespace, True).values())
+        var_decls = [d for d in decls
+                     if not isinstance(d, ast.ParameterDeclaration)]
+        if (not var_decls and ret_type != self.bt_factory.get_void_type()):
+            # The function does not contain any declarations and its return
+            # type is not Unit. So, we can create an expression-based function.
+            # body = expr if ut.random.bool(cfg.prob.function_expr) else \
+            #     ast.Block([expr])
+            res = [expr]
+        else:
+            exprs, decls = self._gen_side_effects()
+            res = decls + exprs + [expr]
+            # body = ast.Block(decls + exprs + [expr])
+        return res
 
     # Where
 

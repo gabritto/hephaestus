@@ -48,7 +48,7 @@ class ASTVisitor():
             ast.Assignment: self.visit_assign,
             ast.Program: self.visit_program,
             ast.Block: self.visit_block,
-            ast.Typeof: self.visit_typeof_expr
+            ast.Typeof: self.visit_typeof_expr,
             ast.IfElse: self.visit_if_else
             # tast.TypeAliasDeclaration: self.visit_type_alias_decl
         }

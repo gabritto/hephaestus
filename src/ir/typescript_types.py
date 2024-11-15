@@ -1,7 +1,7 @@
 from collections import defaultdict
-from typing import List
+from typing import List, Tuple
 
-from src.generators.generator import Generator
+# from src.generators.generator import Generator
 import src.ir.ast as ast
 import src.ir.typescript_ast as ts_ast
 import src.ir.builtins as bt
@@ -141,24 +141,38 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
                 etype, constants),
         }
 
-    def gen_narrowable_union_type(self, gen: Generator):
+    def gen_narrowable_union_type(self, gen):
         return self._union_type_factory.gen_narrowable_union_type(gen)
 
     # Narrowing body
-    def _gen_narrowing_body(self, gen: Generator, narrow_type: 'UnionType', param: ast.ParameterDeclaration, ret_type: tp.Type) -> ast.Block:
+    def gen_narrowing_body(self, gen, narrow_type: 'UnionType', param: ast.ParameterDeclaration, ret_type: tp.Type) -> ast.Block:
         types = narrow_type.types
         statements = []
-        first = False
-        narrow_stmts = []
+        narrow_conds = []
         for type in types:
             # `typeof param === "kind"`
             condition = gen_narrowing_condition(gen, type, param)
             param_var = ast.Variable(param.name)
             # `let variable = param`
             narrow_assert = gen.gen_variable_decl(etype=type, expr=param_var)
-            narrow_stmt = ast.Conditional
-            narrow_stmts.append()
-        return None # TODO
+            narrow_conds.append((condition, narrow_assert))
+        narrow_stmt = get_if_else(narrow_conds)
+        # TODO: we could generate a return inside each narrowing,
+        # would have to add the parameter with the narrowed type to ctx
+        stmts = gen._gen_func_body_stmts(ret_type)
+        return ast.Block([narrow_stmt] + stmts)
+
+def get_if_else(narrow_conds: List[Tuple[ast.Expr, ast.Node]]) -> ast.IfElse:
+    if len(narrow_conds) < 2:
+        raise Exception("narrow_conds length is less than 2")
+    if len(narrow_conds) == 2:
+        else_block = ast.Block(body=[narrow_conds[1][1]], is_func_block=False)
+    else:
+        else_block = [get_if_else(narrow_conds[1:])]
+    return ast.IfElse(
+        narrow_conds[0][0],
+        ast.Block(body=[narrow_conds[0][1]], is_func_block=False),
+        else_block)
 
 class TypeScriptBuiltin(tp.Builtin):
     def __init__(self, name, primitive):
@@ -828,7 +842,7 @@ class UnionTypeFactory(object):
         t = ut.random.choice(type_candidates)
         return constants[t.name](t)
     
-    def gen_narrowable_union_type(self, gen: Generator) -> UnionType:
+    def gen_narrowable_union_type(self, gen) -> UnionType:
         max_num_of_types = self.get_number_of_types()
         kinds = set(TYPE_KINDS)
         types = set()
@@ -857,14 +871,14 @@ def get_type_kind(type: tp.Type) -> str:
         'UnionType': 'union'
         }
     type_name = type.get_name()
-    type_kind = name_to_kind[type_name]
+    type_kind = name_to_kind[type_name] if type_name in name_to_kind else None
     if type_kind is not None:
         return type_kind
     if type_name.startswith('Function'):
         return 'function'
     return 'object'
 
-def gen_narrowing_condition(gen: Generator, type: tp.Type, param: ast.ParameterDeclaration) -> ast.Expression:
+def gen_narrowing_condition(gen, type: tp.Type, param: ast.ParameterDeclaration) -> ast.Expr:
     kind = get_type_kind(type)
     constant = ast.StringConstant(kind)
     lexpr = ast.Typeof(ast.Variable(param.name))
