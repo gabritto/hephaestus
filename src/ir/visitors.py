@@ -268,7 +268,7 @@ class DefaultVisitor(ASTVisitor):
         return self._visit_node(node)
     
     def visit_if_else(self, node):
-        return self.visit_node(node)
+        return self._visit_node(node)
 
     # def visit_type_alias_decl(self, node):
     #     return self._visit_node(node)

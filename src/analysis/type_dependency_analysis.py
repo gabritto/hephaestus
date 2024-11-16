@@ -1091,7 +1091,33 @@ class TypeDependencyAnalysis(DefaultVisitor):
             self._inferred_nodes[parent_node_id].append(target)
     
     def visit_typeof_expr(self, node):
-        return super().visit_typeof_expr(node) # TODO
+        prev = copy(self._stack)
+        self._stack.append("TYPEOF")
+        prev_expt = self._exp_type
+        self._exp_type = None
+        super().visit_typeof_expr(node)
+        self._stack = prev
+        self._exp_type = prev_expt
+
+        node_id, _ = self._get_node_id()
+        self._inferred_nodes[node_id].append(
+            TypeNode(self._bt_factory.get_string_type(), None))
     
     def visit_if_else(self, node):
-        return super().visit_if_else(node) # TODO
+        # Copied from `visit_conditional`
+        from copy import copy
+        prev = copy(self._stack)
+        self._stack.append("COND")
+        prev_expt = self._exp_type
+        self._exp_type = None
+        self.visit(node.cond)
+        self._stack = prev
+        self._exp_type = prev_expt
+
+        namespace = self._namespace
+
+        self._namespace = namespace + ("true_block",)
+        self.visit(node.true_block)
+        self._namespace = namespace + ("false_block",)
+        self.visit(node.false_block)
+        self._namespace = namespace
