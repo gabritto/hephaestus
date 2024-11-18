@@ -144,17 +144,21 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
     def gen_narrowable_union_type(self, gen):
         return self._union_type_factory.gen_narrowable_union_type(gen)
 
-    # Narrowing body
+    # Narrowing function body
     def gen_narrowing_body(self, gen, narrow_type: 'UnionType', param: ast.ParameterDeclaration, ret_type: tp.Type) -> ast.Block:
         types = narrow_type.types
         statements = []
         narrow_conds = []
+        old_namespace = gen.namespace
         for type in types:
             # `typeof param === "kind"`
-            condition = gen_narrowing_condition(gen, type, param)
+            kind = get_type_kind(type, gen)
+            condition = gen_narrowing_condition(kind, param)
             param_var = ast.Variable(param.name)
             # `let variable = param`
+            gen.namespace = old_namespace + (ut.random.identifier('lower'),)
             narrow_assert = gen.gen_variable_decl(etype=type, expr=param_var)
+            gen.namespace = old_namespace
             narrow_conds.append((condition, narrow_assert))
         narrow_stmt = get_if_else(narrow_conds)
         # TODO: we could generate a return inside each narrowing,
@@ -168,7 +172,7 @@ def get_if_else(narrow_conds: List[Tuple[ast.Expr, ast.Node]]) -> ast.IfElse:
     if len(narrow_conds) == 2:
         else_block = ast.Block(body=[narrow_conds[1][1]], is_func_block=False)
     else:
-        else_block = ast.Block([get_if_else(narrow_conds[1:])])
+        else_block = ast.Block([get_if_else(narrow_conds[1:])], is_func_block=False)
     return ast.IfElse(
         narrow_conds[0][0],
         ast.Block(body=[narrow_conds[0][1]], is_func_block=False),
@@ -848,38 +852,57 @@ class UnionTypeFactory(object):
         types = set()
         while len(types) < max_num_of_types: # TODO: filter out union types; can't filter all compound types because that includes some TS types I believe
             type = gen.select_type(exclude_native_compound_types=True,
-                                        filter_func=lambda t: get_type_kind(t) in kinds)
+                                        filter_func=lambda t: get_type_kind(t, gen) in kinds)
             if type is None:
                 break
             types.add(type)
-            kind = get_type_kind(type)
+            kind = get_type_kind(type, gen)
             kinds.remove(kind)
+        if len(types) < 2:
+            return None
         return UnionType(list(types))
 
 
-def get_type_kind(type: tp.Type) -> str:
+def get_type_kind(typ: tp.Type, gen) -> str:
     name_to_kind = {
         'StringLiteralType': 'string',
         'string': 'string',
-        'numberLiteralType': 'number',
+        'NumberLiteralType': 'number',
         'number': 'number',
-        'BigInt': 'BigInt',
+        'bigint': 'bigint',
         'boolean': 'boolean',
         'undefined': 'undefined',
         'null': 'object',
         'Array': 'object',
         'UnionType': 'union'
         }
-    type_name = type.get_name()
+    type_name = typ.get_name()
     type_kind = name_to_kind[type_name] if type_name in name_to_kind else None
     if type_kind is not None:
         return type_kind
     if type_name.startswith('Function'):
         return 'function'
+    if type_name == 'Object':
+        return 'unknown'
+    if isinstance(typ, tp.TypeParameter):
+        return 'unknown'
+    if is_empty_object_type(typ, gen):
+        return 'unknown'
     return 'object'
 
-def gen_narrowing_condition(gen, type: tp.Type, param: ast.ParameterDeclaration) -> ast.Expr:
-    kind = get_type_kind(type)
+def is_empty_object_type(type, gen) -> bool:
+    name = type.name
+    class_decls = gen.context.get_classes(gen.namespace).values()
+    candidates = [c for c in class_decls if c.name == name]
+    if len(candidates) == 0:
+        return False
+    cls = candidates[0]
+    attrs = cls.get_all_attributes(class_decls)
+    if len(attrs) == 0:
+        return True
+    return False
+
+def gen_narrowing_condition(kind: str, param: ast.ParameterDeclaration) -> ast.Expr:
     constant = ast.StringConstant(kind)
     lexpr = ast.Typeof(ast.Variable(param.name))
     # `typeof param === kind`
