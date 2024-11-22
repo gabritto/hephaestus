@@ -80,6 +80,15 @@ class TypeScriptTranslator(BaseTranslator):
     def get_union(self, utype):
         return " | ".join([self.get_type_name(t, True) for t in utype.types])
 
+    def get_mapped(self, mtype):
+        return ("{[" + self.get_type_name(mtype.key_type) +
+                " in " + self.get_type_name(mtype.in_type) +
+                "]: " + self.get_type_name(mtype.property_type) +
+                "}")
+
+    def get_keyof(self, kotype):
+        return ("keyof " + self.get_type_name(kotype.of_type))
+
     def type_arg2str(self, t_arg, from_union=False):
         # TypeScript does not have a Wildcard type
         if not t_arg.is_wildcard():
@@ -93,6 +102,10 @@ class TypeScriptTranslator(BaseTranslator):
             return str(t.get_literal())
         if t.name == 'UnionType':
             return self.get_union(t)
+        if t.name == 'KeyOf':
+            return self.get_keyof(t)
+        if t.name == 'MappedType':
+            return self.get_mapped(t)
         if not t_constructor:
             return t.get_name()
 

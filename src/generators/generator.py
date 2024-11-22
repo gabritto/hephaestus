@@ -1064,6 +1064,7 @@ class Generator():
                 type_f = self._gen_matching_class(
                     etype, 'fields', not_void=True,
                 )
+            if type_f is None: print("none")
             receiver = self.generate_expr(type_f.receiver_t, only_leaves)
             objs.append(gu.AttrReceiverInfo(
                 receiver, None, type_f.attr_decl, None))
