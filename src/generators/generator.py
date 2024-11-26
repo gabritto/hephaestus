@@ -985,7 +985,13 @@ class Generator():
             if isinstance(getattr(var_type, 't_constructor', None),
                           self.function_type):
                 continue
-            cls, type_var_map = self._get_class(var_type)
+
+            # Jasper: Hack to prevent this from failing when it sees a mapped type
+            get_class = self._get_class(var_type)
+            if get_class is None:
+                continue
+
+            cls, type_var_map = get_class
             for field in cls.fields:
                 # Ok here we create a new field whose type corresponds
                 # to the type argument with which the class 'c' is
@@ -1064,7 +1070,6 @@ class Generator():
                 type_f = self._gen_matching_class(
                     etype, 'fields', not_void=True,
                 )
-            if type_f is None: print("none")
             receiver = self.generate_expr(type_f.receiver_t, only_leaves)
             objs.append(gu.AttrReceiverInfo(
                 receiver, None, type_f.attr_decl, None))
@@ -2427,7 +2432,13 @@ class Generator():
             if isinstance(getattr(var_type, 't_constructor', None),
                           self.function_type) or isinstance(var_type, self.function_type):
                 continue
-            cls, type_map_var = self._get_class(var_type)
+
+            # Jasper: Hack to prevent this from failing when it sees a mapped type
+            get_class = self._get_class(var_type)
+            if get_class is None:
+                continue
+
+            cls, type_map_var = get_class
             for attr in self._get_class_attributes(cls, attr_name):
                 attr_type = tp.substitute_type(
                     attr.get_type(), type_map_var)

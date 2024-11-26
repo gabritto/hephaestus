@@ -80,10 +80,9 @@ class TypeScriptTranslator(BaseTranslator):
     def get_union(self, utype):
         return " | ".join([self.get_type_name(t, True) for t in utype.types])
 
-    def get_mapped(self, mtype):
-        return ("{[" + self.get_type_name(mtype.key_type) +
-                " in " + self.get_type_name(mtype.in_type) +
-                "]: " + self.get_type_name(mtype.property_type) +
+    def get_mapped(self, in_type, prop_type):
+        return ("{[Property in " + self.get_type_name(in_type) +
+                "]: " + self.get_type_name(prop_type) +
                 "}")
 
     def get_keyof(self, kotype):
@@ -104,12 +103,14 @@ class TypeScriptTranslator(BaseTranslator):
             return self.get_union(t)
         if t.name == 'KeyOf':
             return self.get_keyof(t)
-        if t.name == 'MappedType':
-            return self.get_mapped(t)
         if not t_constructor:
             return t.get_name()
 
         func_name = tst.TypeScriptBuiltinFactory().get_function_type().name[:-1]
+        if t_constructor.name == 'MappedType':
+            key_type = t.type_args[0]
+            prop_type = t.type_args[-1]
+            return self.get_mapped(key_type, prop_type)
         if t_constructor.name.startswith(func_name):
             param_types = t.type_args[:-1]
             ret_type = t.type_args[-1]

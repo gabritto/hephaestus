@@ -105,11 +105,11 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
         return types
 
     def get_compound_types(self, gen_object):
-        keyof = self._keyof_factory.get_keyof_type(gen_object)
         types = [
             self._union_type_factory.get_union_type(gen_object),
-            # self._mapped_type_factory.get_mapped_type(gen_object)
+            self._mapped_type_factory.get_mapped_type(gen_object)
         ]
+        keyof = self._keyof_factory.get_keyof_type(gen_object)
         if keyof is not None:
             types.append(keyof)
         return types
@@ -848,7 +848,7 @@ class UnionTypeFactory(object):
         """
         type_candidates = [t for t in utype.types if t.name in constants]
         if len(type_candidates) == 0:
-            return ast.BottomConstant(None) if len(utype.types) == 0 else ast.BottomConstant(utype.types[0])
+            return ast.BottomConstant(utype.types[0])
         t = ut.random.choice(type_candidates)
         return constants[t.name](t)
     
@@ -946,8 +946,12 @@ class KeyOf(UnionType):
             raise TypeError("Can only take keyof a class")
 
         self.of_type = of_type
-        of_type_decl = gen.context.get_classes(gen.namespace)[of_type.name]
-        key_types = [StringLiteralType(f.name) for f in of_type_decl.fields + of_type_decl.functions]
+        to_visit = [gen.context.get_classes(gen.namespace)[of_type.name]]
+        key_types = []
+        while len(to_visit) > 0:
+            curr = to_visit.pop()
+            key_types += [StringLiteralType(f.name) for f in curr.fields + curr.functions]
+            to_visit += [gen.context.get_classes(gen.namespace)[sc.class_type.name] for sc in curr.superclasses]
         super().__init__(key_types, name="KeyOf")
 
 class KeyOfFactory(object):
@@ -959,67 +963,82 @@ class KeyOfFactory(object):
                                   exclude_native_compound_types=True)
         if not isinstance(of_type, tp.SimpleClassifier):
             return None
+        of_type_decl = gen.context.get_classes(gen.namespace)[of_type.name]
+        if (len(of_type_decl.fields) + len(of_type_decl.functions)) == 0:
+            return None
         return KeyOf(of_type, gen)
 
-class MappedType(TypeScriptBuiltin):
-    def __init__(self, in_type: tp.Type, property_type: tp.Type, primitive=False):
-        super().__init__("MappedType", primitive)
+# Implement mapped types as a type constructor
+# I think this triggers different bugs in the generator but its far simpler
+class MappedType(tp.TypeConstructor):
+    def __init__(self):
+        self.nr_type_parameters = 2
+        type_parameters = [
+            tp.TypeParameter("K", tp.Invariant),
+            tp.TypeParameter("P", tp.Covariant)]
+        super().__init__("MappedType", type_parameters)
         self.supertypes.append(ObjectType())
-        if not isinstance(in_type, UnionType):
-            raise TypeError("Mapped type keys must be given as a union")
 
-        self.in_type = in_type
-        self.property_type = property_type
-        self.key_type = tp.TypeParameter("T", bound=in_type)
+# TODO old mapped types implementation
+#
+# class MappedType(TypeScriptBuiltin):
+#     def __init__(self, in_type: tp.Type, property_type: tp.Type, primitive=False):
+#         super().__init__("MappedType", primitive)
+#         self.supertypes.append(ObjectType())
+#         if not isinstance(in_type, UnionType):
+#             raise TypeError("Mapped type keys must be given as a union")
 
-    def get_types(self) -> list[tp.Type]:
-        return [self.in_type, self.property_type]
+#         self.in_type = in_type
+#         self.property_type = property_type
+#         self.types = [in_type, property_type]
 
-    def is_compound(self) -> bool:
-        return True
+#     def get_types(self) -> list[tp.Type]:
+#         return self.types
 
-    # TODO wtf is
-    # @two_way_subtyping
-    def is_subtype(self, other) -> bool:
-        if isinstance(other, MappedType):
-            return (other.key_type.is_subtype(self.key_type)
-                    and self.property_type.is_subtype(other.property_type))
-        return False
+#     def is_compound(self) -> bool:
+#         return True
 
-    def has_type_variables(self) -> bool:
-        return True
+#     @two_way_subtyping
+#     def is_subtype(self, other) -> bool:
+#         if isinstance(other, MappedType):
+#             # Covariant in the property type, contravariant in the key type
+#             return (other.in_type.is_subtype(self.in_type)
+#                     and self.property_type.is_subtype(other.property_type))
+#         # TODO possibly handle the mapped type/class case
+#         return False
 
-    def get_type_variable_assignments(self):
-        # TODO
-        return {}
+#     def has_type_variables(self) -> bool:
+#         return any(t.has_type_variables() for t in self.types)
 
-    def to_type_variable_free(self, factory):
-        new_types = []
-        for t in [self.in_type, self.property_type]:
-            if t.is_compound():
-                new_type = t.to_type_variable_free(factory)
-            elif t.is_type_var():
-                bound = t.get_bound_rec(factory)
-                new_type = factory.get_any_type() if bound is None else bound
-            else:
-                new_type = t
-            new_types.append(new_type)
-        return MappedType(new_types[0], new_types[1])
+#     def to_type_variable_free(self, factory):
+#         new_types = []
+#         for t in [self.in_type, self.property_type]:
+#             if t.is_compound():
+#                 new_type = t.to_type_variable_free(factory)
+#             elif t.is_type_var():
+#                 bound = t.get_bound_rec(factory)
+#                 new_type = factory.get_any_type() if bound is None else bound
+#             else:
+#                 new_type = t
+#             new_types.append(new_type)
+#         return MappedType(new_types[0], new_types[1])
 
-    def get_type_variables(self, factory):
-        type_vars = defaultdict(set)
-        for t in [self.in_type, self.property_type, self.key_type]:
-            if t.is_type_var():
-                type_vars[t].add(
-                    t.get_bound_rec(factory))
-            elif t.is_compound() or t.is_wildcard():
-                for k, v in t.get_type_variables(factory).items():
-                    type_vars[k].update(v)
-            else:
-                continue
-        return type_vars
-    def unify_types(self, t1, factory, same_type=True):
-        return {}
+#     def get_type_variables(self, factory):
+#         type_vars = defaultdict(set)
+#         for t in [self.in_type, self.property_type]:
+#             if t.is_type_var():
+#                 type_vars[t].add(
+#                     t.get_bound_rec(factory))
+#             elif t.is_compound() or t.is_wildcard():
+#                 for k, v in t.get_type_variables(factory).items():
+#                     type_vars[k].update(v)
+#             else:
+#                 continue
+#         return type_vars
+
+#     def unify_types(self, t, factory, same_type=True):
+#         # TODO for now pretend as if we cannot be unified with any other type
+#         return {}
 
 class MappedTypeFactory(object):
     def __init__(self, keyof_factory, literal_type_factory, max_keys: int):
@@ -1027,9 +1046,8 @@ class MappedTypeFactory(object):
         self._literal_type_factory = literal_type_factory
         self._max_keys = max_keys
     def get_mapped_type(self, gen) -> tp.Type:
-        in_type = None
-        if (ut.random.bool()):
-            in_type = self._keyof_factory.get_keyof_type(gen)
+        in_type = self._keyof_factory.get_keyof_type(gen)
+        # If we can't come up with a keyof type, use a union of literals as the key
         if in_type is None:
             types = []
             while len(types) < self._max_keys:
@@ -1038,7 +1056,7 @@ class MappedTypeFactory(object):
             in_type = UnionType(types)
 
         property_type = gen.select_type(exclude_native_compound_types=True)
-        return MappedType(in_type, property_type)
+        return tp.ParameterizedType(MappedType(), [in_type, property_type])
 
 
 # Generator Extension
