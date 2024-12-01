@@ -112,6 +112,11 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
         keyof = self._keyof_factory.get_keyof_type(gen_object)
         if keyof is not None:
             types.append(keyof)
+
+        ctx = gen_object.context
+        mapped_types = [t for t in ctx.get_types(gen_object.namespace) if isinstance(t, tp.ParameterizedType) and isinstance(t.t_constructor, MappedType)]
+        for t in mapped_types:
+            types.append(tp.TypeParameter(t.t_constructor.key_name, t.type_args[0]))
         return types
 
     def get_constant_candidates(self, constants):
@@ -968,77 +973,26 @@ class KeyOfFactory(object):
             return None
         return KeyOf(of_type, gen)
 
-# Implement mapped types as a type constructor
-# I think this triggers different bugs in the generator but its far simpler
 class MappedType(tp.TypeConstructor):
-    def __init__(self):
+    def __init__(self, key_name):
         self.nr_type_parameters = 2
+        self.key_name = key_name
         type_parameters = [
             tp.TypeParameter("K", tp.Invariant),
-            tp.TypeParameter("P", tp.Covariant)]
+            tp.TypeParameter("P", tp.Invariant)]
         super().__init__("MappedType", type_parameters)
         self.supertypes.append(ObjectType())
 
-# TODO old mapped types implementation
-#
-# class MappedType(TypeScriptBuiltin):
-#     def __init__(self, in_type: tp.Type, property_type: tp.Type, primitive=False):
-#         super().__init__("MappedType", primitive)
-#         self.supertypes.append(ObjectType())
-#         if not isinstance(in_type, UnionType):
-#             raise TypeError("Mapped type keys must be given as a union")
+class MappedTypeKey(tp.Classifier):
+    def __init__(self, key_name: str):
+        self.key_name = key_name
+        super().__init__("Key")
 
-#         self.in_type = in_type
-#         self.property_type = property_type
-#         self.types = [in_type, property_type]
+    def has_type_variables(self):
+        return False
 
-#     def get_types(self) -> list[tp.Type]:
-#         return self.types
-
-#     def is_compound(self) -> bool:
-#         return True
-
-#     @two_way_subtyping
-#     def is_subtype(self, other) -> bool:
-#         if isinstance(other, MappedType):
-#             # Covariant in the property type, contravariant in the key type
-#             return (other.in_type.is_subtype(self.in_type)
-#                     and self.property_type.is_subtype(other.property_type))
-#         # TODO possibly handle the mapped type/class case
-#         return False
-
-#     def has_type_variables(self) -> bool:
-#         return any(t.has_type_variables() for t in self.types)
-
-#     def to_type_variable_free(self, factory):
-#         new_types = []
-#         for t in [self.in_type, self.property_type]:
-#             if t.is_compound():
-#                 new_type = t.to_type_variable_free(factory)
-#             elif t.is_type_var():
-#                 bound = t.get_bound_rec(factory)
-#                 new_type = factory.get_any_type() if bound is None else bound
-#             else:
-#                 new_type = t
-#             new_types.append(new_type)
-#         return MappedType(new_types[0], new_types[1])
-
-#     def get_type_variables(self, factory):
-#         type_vars = defaultdict(set)
-#         for t in [self.in_type, self.property_type]:
-#             if t.is_type_var():
-#                 type_vars[t].add(
-#                     t.get_bound_rec(factory))
-#             elif t.is_compound() or t.is_wildcard():
-#                 for k, v in t.get_type_variables(factory).items():
-#                     type_vars[k].update(v)
-#             else:
-#                 continue
-#         return type_vars
-
-#     def unify_types(self, t, factory, same_type=True):
-#         # TODO for now pretend as if we cannot be unified with any other type
-#         return {}
+    def is_subtype(self, other: tp.Type) -> bool:
+        return other == self
 
 class MappedTypeFactory(object):
     def __init__(self, keyof_factory, literal_type_factory, max_keys: int):
@@ -1055,8 +1009,21 @@ class MappedTypeFactory(object):
                 types.append(t[0] if ut.random.bool() else t[1])
             in_type = UnionType(types)
 
+        key_type = MappedTypeKey(ut.random.identifier('capitalize'))
+        mapped_type = MappedType(key_type.key_name)
+
+        # Hack to make key type available when generating property type
+
+        init_namespace = gen.namespace
+        gen.namespace += ("mapped_type",)
+
+        gen.context.add_type(gen.namespace, key_type.key_name, key_type)
         property_type = gen.select_type(exclude_native_compound_types=True)
-        return tp.ParameterizedType(MappedType(), [in_type, property_type])
+        gen.context.remove_type(gen.namespace, key_type.key_name)
+        gen.namespace = init_namespace
+
+        # return MappedType(in_type, property_type)
+        return tp.ParameterizedType(mapped_type, [in_type, property_type])
 
 
 # Generator Extension
