@@ -8,6 +8,7 @@ import src.ir.builtins as bt
 import src.ir.types as tp
 import src.ir.ast as ast
 import src.utils as ut
+import src.ir.context as ctx
 from src.ir.decorators import two_way_subtyping
 
 
@@ -18,6 +19,10 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
             max_string_literal_types, max_num_literal_types)
         self._union_type_factory = UnionTypeFactory(max_union_types,
                                                     max_types_in_union)
+        self._keyof_factory = KeyOfFactory()
+        self._mapped_type_factory = MappedTypeFactory(self._keyof_factory,
+                                                      self._literal_type_factory,
+                                                      max_keys=10)
 
     def get_language(self):
         return "typescript"
@@ -99,19 +104,20 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
             ] + self._literal_type_factory.get_literal_types())
         return types
 
-    def get_decl_candidates(self):
-        return []
-        # return [gen_type_alias_decl, ]
-
-    def update_add_node_to_parent(self):
-        return {
-            ts_ast.TypeAliasDeclaration: add_type_alias,
-        }
-
     def get_compound_types(self, gen_object):
-        return [
+        types = [
             self._union_type_factory.get_union_type(gen_object),
+            self._mapped_type_factory.get_mapped_type(gen_object)
         ]
+        keyof = self._keyof_factory.get_keyof_type(gen_object)
+        if keyof is not None:
+            types.append(keyof)
+
+        ctx = gen_object.context
+        mapped_types = [t for t in ctx.get_types(gen_object.namespace) if isinstance(t, tp.ParameterizedType) and isinstance(t.t_constructor, MappedType)]
+        for t in mapped_types:
+            types.append(tp.TypeParameter(t.t_constructor.key_name, t.type_args[0]))
+        return types
 
     def get_constant_candidates(self, constants):
         """ Updates the constant candidates of the generator
@@ -138,7 +144,7 @@ class TypeScriptBuiltinFactory(bt.BuiltinFactory):
             "StringLiteralType": lambda etype: ast.StringConstant(
                 etype.literal),
             "UnionType": lambda etype: self._union_type_factory.get_union_constant(
-                etype, constants),
+                etype, constants)
         }
 
     def gen_narrowable_union_type(self, gen):
@@ -387,6 +393,8 @@ class NumberLiteralType(TypeScriptBuiltin):
 
 class StringLiteralType(TypeScriptBuiltin):
     def __init__(self, literal, name="StringLiteralType", primitive=False):
+        if not isinstance(literal, str):
+            raise TypeError(literal)
         super().__init__(name, primitive)
         self.literal = literal
         self.supertypes.append(StringType())
@@ -485,6 +493,9 @@ class UnionType(TypeScriptBuiltin):
 
     def is_compound(self):
         return True
+
+    def get_builtin_type(self):
+        return UnionType
 
     @two_way_subtyping
     def is_subtype(self, other):
@@ -874,7 +885,8 @@ def get_type_kind(typ: tp.Type, gen) -> str:
         'undefined': 'undefined',
         'null': 'object',
         'Array': 'object',
-        'UnionType': 'union'
+        'UnionType': 'union',
+        'KeyOf': 'union'
         }
     type_name = typ.get_name()
     type_kind = name_to_kind[type_name] if type_name in name_to_kind else None
@@ -932,6 +944,86 @@ class FunctionType(tp.TypeConstructor):
         self.nr_type_parameters = nr_type_parameters
         super().__init__(name, type_parameters)
         self.supertypes.append(ObjectType())
+
+class KeyOf(UnionType):
+    def __init__(self, of_type: tp.Type, gen, primitive=False):
+        if not isinstance(of_type, tp.SimpleClassifier):
+            raise TypeError("Can only take keyof a class")
+
+        self.of_type = of_type
+        to_visit = [gen.context.get_classes(gen.namespace)[of_type.name]]
+        key_types = []
+        while len(to_visit) > 0:
+            curr = to_visit.pop()
+            key_types += [StringLiteralType(f.name) for f in curr.fields + curr.functions]
+            to_visit += [gen.context.get_classes(gen.namespace)[sc.class_type.name] for sc in curr.superclasses]
+        super().__init__(key_types, name="KeyOf")
+
+class KeyOfFactory(object):
+    def get_keyof_type(self, gen) -> tp.Type | None:
+        of_type = gen.select_type(exclude_arrays=True,
+                                  exclude_covariants=True,
+                                  exclude_contravariants=True,
+                                  exclude_function_types=True,
+                                  exclude_native_compound_types=True)
+        if not isinstance(of_type, tp.SimpleClassifier):
+            return None
+        of_type_decl = gen.context.get_classes(gen.namespace)[of_type.name]
+        if (len(of_type_decl.fields) + len(of_type_decl.functions)) == 0:
+            return None
+        return KeyOf(of_type, gen)
+
+class MappedType(tp.TypeConstructor):
+    def __init__(self, key_name):
+        self.nr_type_parameters = 2
+        self.key_name = key_name
+        type_parameters = [
+            tp.TypeParameter("K", tp.Invariant),
+            tp.TypeParameter("P", tp.Invariant)]
+        super().__init__("MappedType", type_parameters)
+        self.supertypes.append(ObjectType())
+
+class MappedTypeKey(tp.Classifier):
+    def __init__(self, key_name: str):
+        self.key_name = key_name
+        super().__init__("Key")
+
+    def has_type_variables(self):
+        return False
+
+    def is_subtype(self, other: tp.Type) -> bool:
+        return other == self
+
+class MappedTypeFactory(object):
+    def __init__(self, keyof_factory, literal_type_factory, max_keys: int):
+        self._keyof_factory = keyof_factory
+        self._literal_type_factory = literal_type_factory
+        self._max_keys = max_keys
+    def get_mapped_type(self, gen) -> tp.Type:
+        in_type = self._keyof_factory.get_keyof_type(gen)
+        # If we can't come up with a keyof type, use a union of literals as the key
+        if in_type is None:
+            types = []
+            while len(types) < self._max_keys:
+                t = self._literal_type_factory.get_literal_types()
+                types.append(t[0] if ut.random.bool() else t[1])
+            in_type = UnionType(types)
+
+        key_type = MappedTypeKey(ut.random.identifier('capitalize'))
+        mapped_type = MappedType(key_type.key_name)
+
+        # Hack to make key type available when generating property type
+
+        init_namespace = gen.namespace
+        gen.namespace += ("mapped_type",)
+
+        gen.context.add_type(gen.namespace, key_type.key_name, key_type)
+        property_type = gen.select_type(exclude_native_compound_types=True)
+        gen.context.remove_type(gen.namespace, key_type.key_name)
+        gen.namespace = init_namespace
+
+        # return MappedType(in_type, property_type)
+        return tp.ParameterizedType(mapped_type, [in_type, property_type])
 
 
 # Generator Extension

@@ -80,6 +80,14 @@ class TypeScriptTranslator(BaseTranslator):
     def get_union(self, utype):
         return " | ".join([self.get_type_name(t, True) for t in utype.types])
 
+    def get_mapped(self, key_name, in_type, prop_type):
+        return ("{[" + key_name + " in " + self.get_type_name(in_type) +
+                "]: " + self.get_type_name(prop_type) +
+                "}")
+
+    def get_keyof(self, kotype):
+        return ("keyof " + self.get_type_name(kotype.of_type))
+
     def type_arg2str(self, t_arg, from_union=False):
         # TypeScript does not have a Wildcard type
         if not t_arg.is_wildcard():
@@ -93,10 +101,20 @@ class TypeScriptTranslator(BaseTranslator):
             return str(t.get_literal())
         if t.name == 'UnionType':
             return self.get_union(t)
+        if t.name == 'Key':
+            return t.key_name
+        if t.name == 'KeyOf':
+            return self.get_keyof(t)
+        # if t.name == 'MappedType':
+        #     return self.get_mapped(t.in_type, t.property_type)
         if not t_constructor:
             return t.get_name()
 
         func_name = tst.TypeScriptBuiltinFactory().get_function_type().name[:-1]
+        if t_constructor.name == 'MappedType':
+            key_type = t.type_args[0]
+            prop_type = t.type_args[-1]
+            return self.get_mapped(t_constructor.key_name, key_type, prop_type)
         if t_constructor.name.startswith(func_name):
             param_types = t.type_args[:-1]
             ret_type = t.type_args[-1]
